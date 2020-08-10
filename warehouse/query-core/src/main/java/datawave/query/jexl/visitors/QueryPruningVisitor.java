@@ -76,7 +76,7 @@ public class QueryPruningVisitor extends BaseVisitor {
     private static final Logger log = Logger.getLogger(QueryPruningVisitor.class);
     
     public enum TruthState {
-        UNKNOWN, TRUE, FALSE
+        UNKNOWN, TRUE, FALSE, EMPTY
     }
     
     /**
@@ -186,6 +186,10 @@ public class QueryPruningVisitor extends BaseVisitor {
     
     @Override
     public Object visit(ASTNotNode node, Object data) {
+        if (node.jjtGetNumChildren() == 0) {
+            return TruthState.EMPTY;
+        }
+        
         if (node.jjtGetNumChildren() != 1) {
             throw new IllegalStateException("ASTNotNode must only have one child: " + node);
         }
@@ -203,6 +207,12 @@ public class QueryPruningVisitor extends BaseVisitor {
         } else if (state == TruthState.FALSE) {
             replaceAndAssign(node, originalString, new ASTTrueNode(ParserTreeConstants.JJTTRUENODE));
             return TruthState.TRUE;
+        } else if (state == TruthState.EMPTY) {
+            // prune this whole node
+            if (rewrite) {
+                JexlNodes.removeFromParent(node.jjtGetParent(), node);
+            }
+            return TruthState.EMPTY;
         } else {
             return TruthState.UNKNOWN;
         }
@@ -217,8 +227,16 @@ public class QueryPruningVisitor extends BaseVisitor {
         }
         
         Set<TruthState> states = new HashSet<>();
-        for (int i = 0; i < node.jjtGetNumChildren(); i++) {
+        for (int i = node.jjtGetNumChildren() - 1; i >= 0; i--) {
             TruthState state = (TruthState) (node.jjtGetChild(i).jjtAccept(this, data));
+            if (state == TruthState.EMPTY) {
+                // nothing to set state on E.G. (A || B || ())
+                if (rewrite) {
+                    JexlNodes.removeFromParent(node, node.jjtGetChild(i));
+                }
+                continue;
+            }
+            
             if (state == TruthState.TRUE) {
                 // short circuit
                 replaceAndAssign(node, originalString, new ASTTrueNode(ParserTreeConstants.JJTTRUENODE));
@@ -229,6 +247,12 @@ public class QueryPruningVisitor extends BaseVisitor {
         
         if (states.contains(TruthState.UNKNOWN)) {
             return TruthState.UNKNOWN;
+        } else if (node.jjtGetNumChildren() == 0) {
+            // all states were removed because they are empty, no need to keep this node anymore
+            if (rewrite) {
+                JexlNodes.removeFromParent(node.jjtGetParent(), node);
+            }
+            return TruthState.EMPTY;
         } else {
             replaceAndAssign(node, originalString, new ASTFalseNode(ParserTreeConstants.JJTFALSENODE));
             return TruthState.FALSE;
@@ -244,8 +268,16 @@ public class QueryPruningVisitor extends BaseVisitor {
         }
         
         Set<TruthState> states = new HashSet<>();
-        for (int i = 0; i < node.jjtGetNumChildren(); i++) {
+        for (int i = node.jjtGetNumChildren() - 1; i >= 0; i--) {
             TruthState state = (TruthState) (node.jjtGetChild(i).jjtAccept(this, data));
+            if (state == TruthState.EMPTY) {
+                // nothing to set state on E.G. (A && B && ())
+                if (rewrite) {
+                    JexlNodes.removeFromParent(node, node.jjtGetChild(i));
+                }
+                continue;
+            }
+            
             if (state == TruthState.FALSE) {
                 // short circuit
                 replaceAndAssign(node, originalString, new ASTFalseNode(ParserTreeConstants.JJTFALSENODE));
@@ -256,6 +288,12 @@ public class QueryPruningVisitor extends BaseVisitor {
         
         if (states.contains(TruthState.UNKNOWN)) {
             return TruthState.UNKNOWN;
+        } else if (node.jjtGetNumChildren() == 0) {
+            // all states were removed because they are empty, no need to keep this node anymore
+            if (rewrite) {
+                JexlNodes.removeFromParent(node.jjtGetParent(), node);
+            }
+            return TruthState.EMPTY;
         } else {
             replaceAndAssign(node, originalString, new ASTTrueNode(ParserTreeConstants.JJTTRUENODE));
             return TruthState.TRUE;
@@ -273,20 +311,47 @@ public class QueryPruningVisitor extends BaseVisitor {
     
     @Override
     public Object visit(ASTReference node, Object data) {
+        if (node.jjtGetNumChildren() == 0) {
+            if (rewrite) {
+                JexlNodes.removeFromParent(node.jjtGetParent(), node);
+            }
+            return TruthState.EMPTY;
+        }
         if (node.jjtGetNumChildren() != 1) {
             throw new IllegalStateException("ASTReference must only have one child: " + node);
         }
-        return node.jjtGetChild(0).jjtAccept(this, data);
+        
+        Object result = node.jjtGetChild(0).jjtAccept(this, data);
+        
+        // if the result is EMPTY prune this node
+        if (rewrite && result == TruthState.EMPTY) {
+            JexlNodes.removeFromParent(node.jjtGetParent(), node);
+        }
+        
+        return result;
     }
     
     @Override
     public Object visit(ASTReferenceExpression node, Object data) {
+        if (node.jjtGetNumChildren() == 0) {
+            if (rewrite) {
+                JexlNodes.removeFromParent(node.jjtGetParent(), node);
+            }
+            return TruthState.EMPTY;
+        }
         if (node.jjtGetNumChildren() != 1) {
             log.debug("Unexpected ASTReferenceExpression: " + PrintingVisitor.formattedQueryString(node));
             throw new IllegalStateException("ASTReferenceExpression must only have one child: '" + node + "'");
         }
-        
-        return node.jjtGetChild(0).jjtAccept(this, data);
+    
+        Object result = node.jjtGetChild(0).jjtAccept(this, data);
+    
+        // if the result is EMPTY prune this node
+        if (rewrite && result == TruthState.EMPTY) {
+            JexlNodes.removeFromParent(node.jjtGetParent(), node);
+        }
+    
+        return result;
     }
     
     // true/false for respective nodes

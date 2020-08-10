@@ -2003,8 +2003,9 @@ public class DefaultQueryPlanner extends QueryPlanner {
         boolean needsFullTable = false;
         CloseableIterable<QueryPlan> ranges = null;
         
-        // if the query has already been reduced to false there is no reason to do more
-        if (QueryPruningVisitor.getState(queryTree) == QueryPruningVisitor.TruthState.FALSE) {
+        // if the query has already been reduced to false or empty there is no reason to do more
+        QueryPruningVisitor.TruthState queryState = QueryPruningVisitor.getState(queryTree)
+        if (queryState == QueryPruningVisitor.TruthState.FALSE || queryState == QueryPruningVisitor.TruthState.EMPTY) {
             return new Tuple2<>(emptyCloseableIterator(), false);
         }
         
