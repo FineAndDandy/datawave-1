@@ -282,7 +282,8 @@ public class QueryPruningVisitor extends BaseVisitor {
     @Override
     public Object visit(ASTReferenceExpression node, Object data) {
         if (node.jjtGetNumChildren() != 1) {
-            throw new IllegalStateException("ASTReferenceExpression must only have one child: " + node);
+            log.debug("Unexpected ASTReferenceExpression: " + PrintingVisitor.formattedQueryString(node));
+            throw new IllegalStateException("ASTReferenceExpression must only have one child: '" + node + "'");
         }
         
         return node.jjtGetChild(0).jjtAccept(this, data);
