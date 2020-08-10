@@ -343,14 +343,14 @@ public class QueryPruningVisitor extends BaseVisitor {
             log.debug("Unexpected ASTReferenceExpression: " + PrintingVisitor.formattedQueryString(node));
             throw new IllegalStateException("ASTReferenceExpression must only have one child: '" + node + "'");
         }
-    
+        
         Object result = node.jjtGetChild(0).jjtAccept(this, data);
-    
+        
         // if the result is EMPTY prune this node
         if (rewrite && result == TruthState.EMPTY) {
             JexlNodes.removeFromParent(node.jjtGetParent(), node);
         }
-    
+        
         return result;
     }
     
